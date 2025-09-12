@@ -4,96 +4,207 @@
   <meta charset="UTF-8">
   <title>Equity Market</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
-    th, td { border: 1px solid #ccc; padding: 10px; text-align: center; }
-    th { background: #f2f2f2; }
-    .buy-btn, .sell-btn {
-      padding: 5px 10px; margin: 2px; border: none;
-      border-radius: 6px; cursor: pointer; color: white;
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f4f7fb;
+      color: #333;
     }
-    .buy-btn { background: green; }
-    .sell-btn { background: red; }
+    header {
+      background: linear-gradient(135deg, #4facfe, #00f2fe);
+      color: white;
+      padding: 20px;
+      text-align: center;
+    }
+    header h1 {
+      margin: 0;
+    }
+    .welcome {
+      margin-top: 5px;
+      font-size: 14px;
+    }
+    main {
+      padding: 20px;
+      display: flex;
+      gap: 30px;
+      justify-content: space-between;
+    }
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0px 4px 12px rgba(0,0,0,0.1);
+      flex: 1;
+    }
+    .card h2 {
+      margin-top: 0;
+      margin-bottom: 15px;
+      font-size: 18px;
+      border-bottom: 2px solid #eee;
+      padding-bottom: 10px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      text-align: center;
+      padding: 10px;
+      border-bottom: 1px solid #ddd;
+    }
+    th {
+      background: #f0f0f0;
+    }
+    .btn-group {
+      display: flex;
+      gap: 6px;
+      justify-content: center;
+    }
+    button {
+      padding: 6px 12px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: 0.2s;
+    }
+    .buy { background: #4caf50; color: white; }
+    .sell { background: #f44336; color: white; }
+    button:hover { opacity: 0.8; }
   </style>
 </head>
 <body>
-  <h2>Equity Market</h2>
-  <p id="bankInfo"></p>
-  <table id="equitiesTable">
-    <thead>
-      <tr>
-        <th>Equity</th>
-        <th>Price</th>
-        <th>Buy</th>
-        <th>Sell</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
+  <header>
+    <h1>📈 Equity Market</h1>
+    <div class="welcome" id="welcomeMsg"></div>
+  </header>
+
+  <main>
+    <!-- Available Equities -->
+    <div class="card">
+      <h2>Available Equities</h2>
+      <table id="equitiesTable">
+        <thead>
+          <tr>
+            <th>Equity</th>
+            <th>Price</th>
+            <th>Buy</th>
+            <th>Sell</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <!-- Trade History -->
+    <div class="card">
+      <h2>Trade History</h2>
+      <table id="tradesTable">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Equity</th>
+            <th>Qty</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </main>
 
   <script>
-    // Get bank details
-    function getBankInfo() {
-      const params = new URLSearchParams(window.location.search);
-      const bankCode = params.get("bankCode") || localStorage.getItem("userId");
-      const bankName = localStorage.getItem("bankName") || "Unknown Bank";
-      return { bankCode, bankName };
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyTwaDgxykIUKmowTNwIqap09RmHpKaPF4lcd1pKeoOd3RzH_ZCM-6IMzqoXQmw1ME/exec"; // <-- paste Apps Script Web App URL
+
+    const bankCode = localStorage.getItem("userId");
+    const bankName = localStorage.getItem("bankName");
+
+    // if user not logged in, redirect
+    if (!bankCode || !bankName) {
+      window.location.href = "login.html";
     }
 
-    const { bankCode, bankName } = getBankInfo();
-    document.getElementById("bankInfo").innerText =
-      bankCode ? `Logged in as: ${bankName}` : "Not logged in";
+    document.getElementById("welcomeMsg").textContent =
+      `Welcome, ${bankName} (Bank Code: ${bankCode})`;
 
-    // Example equities (replace with Google Sheets fetch later)
-    const equities = [
-      { name: "Reliance", price: 2500 },
-      { name: "TCS", price: 3500 },
-      { name: "Infosys", price: 1800 }
-    ];
+    // Fetch equities from Google Sheet
+    async function loadEquities() {
+      const res = await fetch(`${SCRIPT_URL}?action=getEquities`);
+      const data = await res.json();
+      if (data.success) {
+        const tbody = document.querySelector("#equitiesTable tbody");
+        tbody.innerHTML = "";
+        data.equities.forEach(eq => {
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td>${eq.name}</td>
+            <td>₹${eq.price}</td>
+            <td>
+              <div class="btn-group">
+                <button class="buy" onclick="makeTrade('${eq.name}',50,'Buy')">50</button>
+                <button class="buy" onclick="makeTrade('${eq.name}',100,'Buy')">100</button>
+                <button class="buy" onclick="makeTrade('${eq.name}',200,'Buy')">200</button>
+              </div>
+            </td>
+            <td>
+              <div class="btn-group">
+                <button class="sell" onclick="makeTrade('${eq.name}',50,'Sell')">50</button>
+                <button class="sell" onclick="makeTrade('${eq.name}',100,'Sell')">100</button>
+                <button class="sell" onclick="makeTrade('${eq.name}',200,'Sell')">200</button>
+              </div>
+            </td>
+          `;
+          tbody.appendChild(row);
+        });
+      }
+    }
 
-    const tbody = document.querySelector("#equitiesTable tbody");
-    equities.forEach(eq => {
-      const row = document.createElement("tr");
-      row.innerHTML = `
-        <td>${eq.name}</td>
-        <td>${eq.price}</td>
-        <td>
-          <button class="buy-btn" onclick="trade('${eq.name}', 50, 'Buy')">Buy 50</button>
-          <button class="buy-btn" onclick="trade('${eq.name}', 100, 'Buy')">Buy 100</button>
-        </td>
-        <td>
-          <button class="sell-btn" onclick="trade('${eq.name}', 50, 'Sell')">Sell 50</button>
-          <button class="sell-btn" onclick="trade('${eq.name}', 100, 'Sell')">Sell 100</button>
-        </td>
-      `;
-      tbody.appendChild(row);
-    });
+    // Log trade
+    async function makeTrade(equity, qty, actionType) {
+      const res = await fetch(SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({
+          action: "logTrade",
+          bankName: bankName,
+          bankCode: bankCode,
+          equity: equity,
+          qty: qty,
+          actionType: actionType
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(`✅ ${actionType} ${qty} of ${equity} logged!`);
+        loadTrades();
+      } else {
+        alert("❌ Error: " + data.error);
+      }
+    }
 
-    // Send trade log to Google Sheets
-    function trade(equity, qty, action) {
-  if (!bankCode || !bankName) {
-    alert("Not logged in! Please log in first.");
-    return;
-  }
+    // Fetch trade history
+    async function loadTrades() {
+      const res = await fetch(`${SCRIPT_URL}?action=getTrades&bankCode=${bankCode}`);
+      const data = await res.json();
+      if (data.success) {
+        const tbody = document.querySelector("#tradesTable tbody");
+        tbody.innerHTML = "";
+        data.trades.forEach(tr => {
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td>${tr.time}</td>
+            <td>${tr.equity}</td>
+            <td>${tr.qty}</td>
+            <td>${tr.action}</td>
+          `;
+          tbody.appendChild(row);
+        });
+      }
+    }
 
-  const data = {
-    action: "logTrade",   // 🔹 important
-    equity,
-    qty,
-    actionType: action,   // avoid overwriting "action"
-    bankName,
-    bankCode
-  };
-
-  fetch("https://script.google.com/macros/s/AKfycbyTwaDgxykIUKmowTNwIqap09RmHpKaPF4lcd1pKeoOd3RzH_ZCM-6IMzqoXQmw1ME/exec", {
-    method: "POST",
-    body: JSON.stringify(data)
-  })
-  .then(res => res.text())
-  .then(txt => alert(txt))
-  .catch(err => alert("Error: " + err));
-}
-
+    // Load everything on page load
+    loadEquities();
+    loadTrades();
   </script>
 </body>
 </html>
