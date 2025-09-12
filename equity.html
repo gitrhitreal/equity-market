@@ -1,335 +1,227 @@
-<!--
-Filename: equity.html
-Purpose: Single-file front-end that receives login details from a previous site (via URL params, opener postMessage, or sessionStorage), shows a simple equities list, fetches prices from an Apps Script backend, and logs buy/sell requests into Google Sheets via Apps Script.
-
-IMPORTANT: Replace placeholders (https://script.google.com/macros/s/AKfycbyTwaDgxykIUKmowTNwIqap09RmHpKaPF4lcd1pKeoOd3RzH_ZCM-6IMzqoXQmw1ME/exec, YOUR_SHEET_ID, TRUSTED_TOKEN) in the server code with your real values. Do NOT paste real bank credentials here — use ephemeral tokens or OAuth and secure HTTPS.
--->
-
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Equity Market — Access</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Equity Market</title>
   <style>
-    :root{font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
-    body{margin:0;background:#f3f4f6;color:#111}
-    .container{max-width:980px;margin:32px auto;padding:20px;background:white;border-radius:12px;box-shadow:0 6px 20px rgba(10,10,10,.06)}
+    body{font-family:Arial,Helvetica,sans-serif;background:#f6f7fb;margin:0;padding:24px}
+    .wrap{max-width:980px;margin:0 auto;background:#fff;padding:18px;border-radius:10px;box-shadow:0 6px 18px rgba(12,12,12,0.06)}
     header{display:flex;justify-content:space-between;align-items:center}
     h1{margin:0;font-size:20px}
-    .account{font-size:14px;color:#444}
-    .market{display:grid;grid-template-columns:1fr 320px;gap:18px;margin-top:18px}
-    .card{padding:16px;border-radius:10px;background:#fafafa}
-    table{width:100%;border-collapse:collapse}
-    th,td{padding:10px;text-align:left}
-    tr + tr{border-top:1px solid #eee}
-    .btn{display:inline-block;padding:6px 10px;border-radius:8px;background:#111;color:#fff;text-decoration:none;cursor:pointer}
     .muted{color:#666;font-size:13px}
-    .qty-btn{margin-right:8px;padding:6px 8px;border-radius:6px;border:1px solid #ddd;background:#fff;cursor:pointer}
-    .action-col{display:flex;flex-direction:column;gap:6px}
+    table{width:100%;border-collapse:collapse;margin-top:12px}
+    th,td{padding:10px;border-bottom:1px solid #eee;text-align:left}
+    .btn{padding:6px 10px;border-radius:6px;border:0;cursor:pointer}
+    .btn-primary{background:#0b74de;color:white}
+    .btn-danger{background:#e03131;color:white}
+    .qty{margin-right:6px;padding:6px 8px;border-radius:6px;border:1px solid #ddd;cursor:pointer}
     .log{margin-top:12px;font-size:13px}
-    .small{font-size:13px}
-    .masked{letter-spacing:2px}
+    select{padding:8px;border-radius:6px;border:1px solid #ddd}
   </style>
 </head>
 <body>
-  <div class="container">
+  <div class="wrap">
     <header>
       <div>
         <h1>Equity Market Access</h1>
-        <div class="account" id="accountInfo">Loading account...</div>
+        <div id="account" class="muted">Loading user...</div>
       </div>
-      <div class="muted">Connected via Apps Script</div>
+      <div class="muted">Connected to Apps Script backend</div>
     </header>
 
-    <div class="market">
-      <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <strong>Watchlist</strong>
-          <div class="small muted">Prices update when you click Refresh</div>
-        </div>
-
-        <table id="equityTable" aria-live="polite">
+    <div style="display:flex;gap:16px;margin-top:16px">
+      <div style="flex:1">
+        <strong>Watchlist</strong>
+        <table id="watch">
           <thead>
-            <tr><th>Symbol</th><th>Price</th><th style="width:220px">Buy / Sell</th></tr>
+            <tr><th>Symbol</th><th>Price</th><th>Actions</th></tr>
           </thead>
-          <tbody>
-            <!-- rows injected by JS -->
-          </tbody>
+          <tbody></tbody>
         </table>
 
-        <div style="margin-top:12px">
-          <button id="refreshBtn" class="btn" style="background:#0b74de">Refresh Prices</button>
+        <div style="margin-top:10px">
+          <button id="refresh" class="btn btn-primary">Refresh Prices</button>
         </div>
 
         <div class="log" id="log"></div>
       </div>
 
-      <div class="card">
-        <strong>Quick Actions</strong>
-        <p class="muted">Use the quantity quick-buttons (50/100/200). A logged trade will be recorded to Google Sheets as <em>pending</em>.</p>
-
-        <div style="margin-top:12px">
-          <label for="symbolSelect">Choose symbol</label>
-          <select id="symbolSelect" style="width:100%;padding:8px;margin-top:6px"></select>
+      <div style="width:320px">
+        <strong>Quick Trader</strong>
+        <p class="muted">Choose a symbol and use quick buttons</p>
+        <div style="margin-top:8px">
+          <select id="symbolSelect"></select>
         </div>
-
-        <div style="margin-top:12px;display:flex;gap:8px">
-          <button id="buy50" class="qty-btn">Buy 50</button>
-          <button id="buy100" class="qty-btn">Buy 100</button>
-          <button id="buy200" class="qty-btn">Buy 200</button>
+        <div style="margin-top:10px">
+          <button class="qty" id="buy50">Buy 50</button>
+          <button class="qty" id="buy100">Buy 100</button>
+          <button class="qty" id="buy200">Buy 200</button>
         </div>
-
-        <div style="margin-top:8px;display:flex;gap:8px">
-          <button id="sell50" class="qty-btn">Sell 50</button>
-          <button id="sell100" class="qty-btn">Sell 100</button>
-          <button id="sell200" class="qty-btn">Sell 200</button>
+        <div style="margin-top:8px">
+          <button class="qty" id="sell50">Sell 50</button>
+          <button class="qty" id="sell100">Sell 100</button>
+          <button class="qty" id="sell200">Sell 200</button>
         </div>
-
-        <hr/>
-        <div class="small muted">Note: This UI logs trades to Google Sheets. Actual settlement is handled by your backend / bank integration.</div>
+        <div style="margin-top:12px" class="muted small">
+          Note: trades are logged as <strong>pending</strong> to your Google Sheet.
+        </div>
       </div>
     </div>
   </div>
 
 <script>
-/* ========== CONFIG ========== */
-// Replace with your Apps Script Exec URL (web app deployed as "Anyone, even anonymous" or with appropriate auth)
-const APPS_SCRIPT_EXEC_URL = 'https://script.google.com/macros/s/AKfycbyTwaDgxykIUKmowTNwIqap09RmHpKaPF4lcd1pKeoOd3RzH_ZCM-6IMzqoXQmw1ME/exec';
-// Example: https://script.google.com/macros/s/AKfycbx.../exec
+/* ====== CONFIG - REPLACE THIS ====== */
+const APPS_SCRIPT_EXEC_URL = 'https://script.google.com/macros/s/AKfycbyTwaDgxykIUKmowTNwIqap09RmHpKaPF4lcd1pKeoOd3RzH_ZCM-6IMzqoXQmw1ME/exec'; // e.g. https://script.google.com/macros/s/AKfycb.../exec
+const WATCHLIST = ['AAPL','MSFT','GOOGL','TSLA','INFY'];
+/* ================================== */
 
-// Default watchlist; you can change this or fetch dynamically
-const DEFAULT_WATCH = ['AAPL','MSFT','GOOGL','TSLA','INFY'];
-
-/* ========== LOGIN / SESSION HANDLING ========== */
-// This file tries multiple ways to *retain* login details passed from the previous site.
-// 1) URL params (e.g. ?userToken=abc&userName=Rizz)
-// 2) window.opener postMessage handshake (if opened in a new tab/window)
-// 3) sessionStorage fallback so clicks within the site keep the session
-
+/* --- session / login retrieval --- */
+/* tries: 1) URL params (userToken,userName)
+         2) window.opener postMessage (handshake)
+         3) sessionStorage */
 function getQueryParams(){
-  const q = new URLSearchParams(window.location.search);
-  const out = {};
-  for(const [k,v] of q.entries()) out[k]=v;
-  return out;
+  const p = new URLSearchParams(window.location.search);
+  const obj = {};
+  for(const [k,v] of p.entries()) obj[k]=v;
+  return obj;
 }
 
-function tryOpenerHandshake(timeoutMs=800){
-  return new Promise((resolve)=>{
+function tryOpener(timeout=700){
+  return new Promise(resolve=>{
     if(!window.opener) return resolve(null);
-    function onMessage(e){
-      try{ const data = typeof e.data==='string' ? JSON.parse(e.data) : e.data; if(data && data.source==='parentSite' && data.userToken){ window.removeEventListener('message',onMessage); resolve(data); }}catch(err){}
+    function onMsg(e){
+      try{
+        const d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+        if(d && d.source==='parentSite' && d.userToken){ window.removeEventListener('message',onMsg); resolve(d); }
+      }catch(e){}
     }
-    window.addEventListener('message',onMessage);
-    // ask opener for creds
-    try{ window.opener.postMessage(JSON.stringify({request:'sendLogin',source:'equityWidget'}),'*'); }catch(err){}
-    // timeout
-    setTimeout(()=>{ window.removeEventListener('message',onMessage); resolve(null); }, timeoutMs);
+    window.addEventListener('message', onMsg);
+    try{ window.opener.postMessage(JSON.stringify({request:'sendLogin',source:'equityWidget'}),'*'); }catch(e){}
+    setTimeout(()=>{ window.removeEventListener('message',onMsg); resolve(null); }, timeout);
   });
 }
 
 async function obtainLogin(){
-  // 1) URL params
   const q = getQueryParams();
-  if(q.userToken){
-    sessionStorage.setItem('userToken', q.userToken);
-    if(q.userName) sessionStorage.setItem('userName', q.userName);
-    return {userToken:q.userToken, userName:q.userName||null};
-  }
-  // 2) try opener
-  const opener = await tryOpenerHandshake();
-  if(opener && opener.userToken){
-    sessionStorage.setItem('userToken', opener.userToken);
-    if(opener.userName) sessionStorage.setItem('userName', opener.userName);
-    return {userToken:opener.userToken, userName:opener.userName||null};
-  }
-  // 3) sessionStorage
-  const stored = sessionStorage.getItem('userToken');
-  if(stored) return {userToken:stored, userName:sessionStorage.getItem('userName')};
-  // 4) nothing
+  if(q.userToken){ sessionStorage.setItem('userToken', q.userToken); if(q.userName) sessionStorage.setItem('userName', q.userName); return {userToken:q.userToken,userName:q.userName}; }
+  const opener = await tryOpener();
+  if(opener && opener.userToken){ sessionStorage.setItem('userToken',opener.userToken); if(opener.userName) sessionStorage.setItem('userName',opener.userName); return {userToken:opener.userToken,userName:opener.userName}; }
+  const t = sessionStorage.getItem('userToken');
+  if(t) return {userToken:t,userName:sessionStorage.getItem('userName')};
   return null;
 }
 
-/* ========== UI & App Script calls ========== */
-const accountInfoEl = document.getElementById('accountInfo');
-const equityTableBody = document.querySelector('#equityTable tbody');
+/* --- UI helpers --- */
+const accountEl = document.getElementById('account');
+const watchBody = document.querySelector('#watch tbody');
 const logEl = document.getElementById('log');
 const symbolSelect = document.getElementById('symbolSelect');
 
-function maskName(name){ if(!name) return 'Unknown user'; return name.replace(/(.).*(.)/,'$1••••$2'); }
-
-function setAccountUI(session){
-  if(!session) { accountInfoEl.textContent = 'Not logged in — no token found.'; return; }
-  accountInfoEl.innerHTML = `<span class="small">User: <span class="masked">${maskName(session.userName||'user')}</span></span>`;
+function setAccountUI(s){
+  if(!s) { accountEl.textContent = 'Not logged in'; return; }
+  accountEl.textContent = `User: ${maskName(s.userName || 'user')}`;
 }
+function maskName(n){ if(!n) return 'user'; return n.length>2 ? n[0]+'••'+n[n.length-1] : '••'; }
+function log(msg){ const d = document.createElement('div'); d.textContent = `${new Date().toLocaleTimeString()} — ${msg}`; logEl.prepend(d); }
 
-function setLog(msg, type='info'){
-  const el = document.createElement('div'); el.textContent = `${new Date().toLocaleTimeString()}: ${msg}`; el.className='small'; logEl.prepend(el);
-}
-
+/* --- Price fetch & render --- */
 async function fetchPrices(symbols){
-  // Call Apps Script to get prices (server may call a market data provider and/or read from a sheet)
   try{
     const url = new URL(APPS_SCRIPT_EXEC_URL);
     url.searchParams.set('action','getPrices');
     url.searchParams.set('symbols', symbols.join(','));
     const res = await fetch(url.toString());
-    if(!res.ok) throw new Error('Network response not ok');
-    const json = await res.json();
-    return json.prices || {};
+    if(!res.ok) throw new Error('Network error');
+    const j = await res.json();
+    return j.prices || {};
   }catch(err){
-    console.error(err); setLog('Failed to fetch prices: '+err.message); return {};
+    console.error(err);
+    log('Failed to fetch prices: ' + (err.message||err));
+    return {};
   }
 }
 
-async function renderWatchlist(symbols){
-  equityTableBody.innerHTML='';
-  symbolSelect.innerHTML='';
+async function renderWatch(symbols){
+  watchBody.innerHTML = '';
+  symbolSelect.innerHTML = '';
   const prices = await fetchPrices(symbols);
   symbols.forEach(sym=>{
-    const price = (prices[sym]!==undefined)?prices[sym]:'—';
+    const price = prices[sym] !== undefined ? prices[sym] : '—';
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${sym}</td><td id="price-${sym}">${price}</td><td><div class="action-col"><div><button class="btn" data-sym="${sym}" data-side="buy">Buy</button> <button class="btn" style="background:#e11" data-sym="${sym}" data-side="sell">Sell</button></div><div style="margin-top:6px"><button class="qty-btn" data-sym="${sym}" data-side="buy" data-qty="50">50</button><button class="qty-btn" data-sym="${sym}" data-side="buy" data-qty="100">100</button><button class="qty-btn" data-sym="${sym}" data-side="buy" data-qty="200">200</button></div></div>`;
-    equityTableBody.appendChild(tr);
+    tr.innerHTML = `<td>${sym}</td><td id="price-${sym}">${price}</td>
+      <td>
+        <button class="btn btn-primary" data-sym="${sym}" data-side="buy">Buy</button>
+        <button class="btn btn-danger" data-sym="${sym}" data-side="sell">Sell</button>
+        <div style="margin-top:8px">
+          <button class="qty" data-sym="${sym}" data-side="buy" data-qty="50">50</button>
+          <button class="qty" data-sym="${sym}" data-side="buy" data-qty="100">100</button>
+          <button class="qty" data-sym="${sym}" data-side="buy" data-qty="200">200</button>
+        </div>
+      </td>`;
+    watchBody.appendChild(tr);
 
-    const option = document.createElement('option'); option.value=sym; option.textContent=sym; symbolSelect.appendChild(option);
+    const opt = document.createElement('option'); opt.value = sym; opt.textContent = sym; symbolSelect.appendChild(opt);
   });
 }
 
-// Attach delegated handlers
-document.addEventListener('click', async (ev)=>{
-  const t = ev.target.closest('button'); if(!t) return;
-  // Quick qty buttons
-  if(t.dataset.qty){
-    const sym = t.dataset.sym, side = t.dataset.side, qty = Number(t.dataset.qty);
-    await logTrade(sym, side, qty);
-  }
-  // Generic buy/sell buttons without qty: open prompt
-  else if(t.dataset.sym && t.dataset.side){
-    const sym = t.dataset.sym, side = t.dataset.side;
-    const qty = Number(prompt(`Enter quantity to ${side} for ${sym}`, '100')) || 0;
-    if(qty>0) await logTrade(sym, side, qty);
-  }
-});
-
-// Quick action handlers
-['buy50','buy100','buy200','sell50','sell100','sell200'].forEach(id=>{
-  const el = document.getElementById(id); if(!el) return;
-  el.addEventListener('click', async ()=>{
-    const sym = symbolSelect.value; if(!sym) return alert('Pick a symbol');
-    const side = id.startsWith('buy')? 'buy':'sell';
-    const qty = Number(id.replace(/[^0-9]/g,''));
-    await logTrade(sym, side, qty);
-  });
-});
-
-// Refresh button
-document.getElementById('refreshBtn').addEventListener('click', async ()=>{
-  await renderWatchlist(DEFAULT_WATCH);
-  setLog('Prices refreshed');
-});
-
+/* --- Logging trades to Apps Script --- */
 async function logTrade(symbol, side, qty){
-  const session = sessionStorage.getItem('userToken');
-  if(!session) return alert('No user token found — trade not logged.');
-  const payload = { action:'logTrade', symbol, side, qty, userToken: session };
+  const token = sessionStorage.getItem('userToken');
+  if(!token){ alert('No user token found. Trade not logged.'); return; }
+  const payload = { action:'logTrade', userToken: token, userName: sessionStorage.getItem('userName')||'', symbol, side, qty };
   try{
     const res = await fetch(APPS_SCRIPT_EXEC_URL + '?action=logTrade', {
-      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
+      method:'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
     });
     const j = await res.json();
-    if(j && j.success){ setLog(`Logged ${side.toUpperCase()} ${qty} ${symbol} (row ${j.row || 'unknown'})`); }
-    else{ setLog(`Failed to log trade: ${j && j.error ? j.error : 'unknown'}`); }
-  }catch(err){ console.error(err); setLog('Network error while logging trade'); }
+    if(j && j.success){ log(`Logged ${side.toUpperCase()} ${qty} ${symbol} (row ${j.row})`); }
+    else { log('Failed to log trade: '+(j && j.error ? j.error : 'unknown')); }
+  }catch(err){
+    console.error(err);
+    log('Network error while logging trade');
+  }
 }
 
-/* ========== INIT ========== */
+/* --- delegated click handling for table buttons --- */
+document.addEventListener('click', async (ev)=>{
+  const btn = ev.target.closest('button');
+  if(!btn) return;
+  if(btn.dataset.qty){ // quick qty inside table
+    await logTrade(btn.dataset.sym, btn.dataset.side, Number(btn.dataset.qty));
+    return;
+  }
+  if(btn.dataset.sym && btn.dataset.side){ // buy/sell button
+    const qty = Number(prompt(`Quantity to ${btn.dataset.side} for ${btn.dataset.sym}`, '100')) || 0;
+    if(qty>0) await logTrade(btn.dataset.sym, btn.dataset.side, qty);
+    return;
+  }
+});
+
+/* --- quick trader buttons --- */
+['buy50','buy100','buy200','sell50','sell100','sell200'].forEach(id=>{
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.addEventListener('click', async ()=>{
+    const sym = symbolSelect.value; if(!sym) return alert('Choose a symbol first');
+    const side = id.startsWith('buy') ? 'buy' : 'sell';
+    const qty = Number(id.replace(/[^0-9]/g,'')); 
+    await logTrade(sym, side, qty);
+  });
+});
+
+/* --- refresh --- */
+document.getElementById('refresh').addEventListener('click', ()=> renderWatch(WATCHLIST));
+
+/* --- init --- */
 (async function init(){
   const session = await obtainLogin();
   setAccountUI(session);
-  // initial render
-  await renderWatchlist(DEFAULT_WATCH);
-  setLog('UI ready');
+  await renderWatch(WATCHLIST);
+  log('UI ready');
 })();
-
-/* ========== OPTIONAL: helper for parent site to open this page in a secure way
-Parent page example (on previous site) can do:
-  const win = window.open('/equity.html?userToken=XXX&userName=Rizz');
-Or using postMessage:
-  // parent
-  win.postMessage(JSON.stringify({source:'parentSite', userToken:'XXX', userName:'Rizz'}),'*');
-*/
-
 </script>
-
-<!--
-====================
-Apps Script backend (Code.gs)
-====================
-Paste the server-side script below into your Google Apps Script project (Code.gs). Deploy as a Web App (Execute as: Me, Who has access: Anyone, even anonymous) if you want to call from a public site. For production, implement proper OAuth/token checks and host behind HTTPS.
--->
-
-<!--
-/* --- Code.gs ---
-Replace SHEET_ID and TRUSTED_TOKEN with your values. The sheet should have a 'Trades' sheet with header row:
-Timestamp | UserToken | UserName | Symbol | Side | Quantity | Price | Status | Notes
-
-This backend supports two actions:
-- GET action=getPrices&symbols=AAPL,MSFT  -> returns {prices: {AAPL: 172.3, ...}}
-- POST action=logTrade (JSON payload) -> logs trade row and returns success and row number
-*/
-
-// ---------- BEGIN APPS SCRIPT ----------
-function doGet(e){
-  const action = e.parameter.action || '';
-  if(action === 'getPrices'){
-    const symbols = (e.parameter.symbols || '').split(',').filter(s=>s);
-    // Placeholder: return fake/random prices OR read from a Prices sheet where you maintain latest values
-    const prices = {};
-    symbols.forEach(sym=> prices[sym] = +(Math.random()*1000).toFixed(2));
-    return ContentService.createTextOutput(JSON.stringify({ prices })).setMimeType(ContentService.MimeType.JSON);
-  }
-  return ContentService.createTextOutput(JSON.stringify({error:'no action'})).setMimeType(ContentService.MimeType.JSON);
-}
-
-function doPost(e){
-  try{
-    const body = e.postData && e.postData.contents ? JSON.parse(e.postData.contents) : {};
-    const action = body.action || (e.parameter && e.parameter.action);
-    if(action === 'logTrade'){
-      const token = body.userToken;
-      // Very simple token check; replace with your real validation
-      if(!token) return jsonResponse({success:false, error:'missing token'});
-
-      const symbol = body.symbol || 'UNKNOWN';
-      const side = body.side || 'buy';
-      const qty = Number(body.qty) || 0;
-      const price = body.price || ''; // optionally filled by client
-
-      const ss = SpreadsheetApp.openById('YOUR_SHEET_ID');
-      const sheet = ss.getSheetByName('Trades') || ss.insertSheet('Trades');
-      // Ensure header exists
-      if(sheet.getLastRow() === 0){
-        sheet.appendRow(['Timestamp','UserToken','UserName','Symbol','Side','Quantity','Price','Status','Notes']);
-      }
-
-      const row = [ new Date(), token, body.userName || '', symbol, side, qty, price || '', 'pending', body.notes || '' ];
-      const res = sheet.appendRow(row);
-      const lastRow = sheet.getLastRow();
-      return jsonResponse({ success:true, row:lastRow });
-    }
-    return jsonResponse({ success:false, error:'unknown action' });
-  }catch(err){
-    return jsonResponse({ success:false, error: err.message });
-  }
-}
-
-function jsonResponse(obj){
-  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
-}
-
-// ---------- END APPS SCRIPT ----------
--->
-
 </body>
 </html>
