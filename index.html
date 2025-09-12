@@ -71,21 +71,29 @@
 
     // Send trade log to Google Sheets
     function trade(equity, qty, action) {
-      if (!bankCode || !bankName) {
-        alert("Not logged in! Please log in first.");
-        return;
-      }
-      const data = { equity, qty, action, bankName, bankCode };
-      console.log("Trade:", data);
+  if (!bankCode || !bankName) {
+    alert("Not logged in! Please log in first.");
+    return;
+  }
 
-      fetch("https://script.google.com/macros/s/AKfycbyTwaDgxykIUKmowTNwIqap09RmHpKaPF4lcd1pKeoOd3RzH_ZCM-6IMzqoXQmw1ME/exec", {
-        method: "POST",
-        body: JSON.stringify(data)
-      })
-      .then(res => res.text())
-      .then(txt => alert(txt))
-      .catch(err => alert("Error: " + err));
-    }
+  const data = {
+    action: "logTrade",   // 🔹 important
+    equity,
+    qty,
+    actionType: action,   // avoid overwriting "action"
+    bankName,
+    bankCode
+  };
+
+  fetch("YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL", {
+    method: "POST",
+    body: JSON.stringify(data)
+  })
+  .then(res => res.text())
+  .then(txt => alert(txt))
+  .catch(err => alert("Error: " + err));
+}
+
   </script>
 </body>
 </html>
