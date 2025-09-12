@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Equity Market</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+    th, td { border: 1px solid #ccc; padding: 10px; text-align: center; }
+    th { background: #f2f2f2; }
+    .buy-btn, .sell-btn {
+      padding: 5px 10px; margin: 2px; border: none;
+      border-radius: 6px; cursor: pointer; color: white;
+    }
+    .buy-btn { background: green; }
+    .sell-btn { background: red; }
+  </style>
+</head>
+<body>
+  <h2>Equity Market</h2>
+  <p id="bankInfo"></p>
+  <table id="equitiesTable">
+    <thead>
+      <tr>
+        <th>Equity</th>
+        <th>Price</th>
+        <th>Buy</th>
+        <th>Sell</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script>
+    // Get bank details
+    function getBankInfo() {
+      const params = new URLSearchParams(window.location.search);
+      const bankCode = params.get("bankCode") || localStorage.getItem("userId");
+      const bankName = localStorage.getItem("bankName") || "Unknown Bank";
+      return { bankCode, bankName };
+    }
+
+    const { bankCode, bankName } = getBankInfo();
+    document.getElementById("bankInfo").innerText =
+      bankCode ? `Logged in as: ${bankName}` : "Not logged in";
+
+    // Example equities (replace with Google Sheets fetch later)
+    const equities = [
+      { name: "Reliance", price: 2500 },
+      { name: "TCS", price: 3500 },
+      { name: "Infosys", price: 1800 }
+    ];
+
+    const tbody = document.querySelector("#equitiesTable tbody");
+    equities.forEach(eq => {
+      const row = document.createElement("tr");
+      row.innerHTML = `
+        <td>${eq.name}</td>
+        <td>${eq.price}</td>
+        <td>
+          <button class="buy-btn" onclick="trade('${eq.name}', 50, 'Buy')">Buy 50</button>
+          <button class="buy-btn" onclick="trade('${eq.name}', 100, 'Buy')">Buy 100</button>
+        </td>
+        <td>
+          <button class="sell-btn" onclick="trade('${eq.name}', 50, 'Sell')">Sell 50</button>
+          <button class="sell-btn" onclick="trade('${eq.name}', 100, 'Sell')">Sell 100</button>
+        </td>
+      `;
+      tbody.appendChild(row);
+    });
+
+    // Send trade log to Google Sheets
+    function trade(equity, qty, action) {
+      if (!bankCode || !bankName) {
+        alert("Not logged in! Please log in first.");
+        return;
+      }
+      const data = { equity, qty, action, bankName, bankCode };
+      console.log("Trade:", data);
+
+      fetch("https://script.google.com/macros/s/AKfycbyTwaDgxykIUKmowTNwIqap09RmHpKaPF4lcd1pKeoOd3RzH_ZCM-6IMzqoXQmw1ME/exec", {
+        method: "POST",
+        body: JSON.stringify(data)
+      })
+      .then(res => res.text())
+      .then(txt => alert(txt))
+      .catch(err => alert("Error: " + err));
+    }
+  </script>
+</body>
+</html>
