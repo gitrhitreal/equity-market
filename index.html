@@ -60,6 +60,7 @@
 
     .buy { background: #28a745; }
     .sell { background: #dc3545; }
+    .view { background: #007bff; }
 
     #message {
       margin-top: 20px;
@@ -78,10 +79,11 @@
     <thead>
       <tr>
         <th>Equity</th>
-        <th>Price(FCC)</th>
+        <th>Price (FCC)</th>
         <th>Your Holdings</th>
         <th>Buy</th>
         <th>Sell</th>
+        <th>Details</th>
       </tr>
     </thead>
     <tbody></tbody>
@@ -120,7 +122,7 @@
 
         tr.innerHTML = `
           <td>${eq.name}</td>
-          <td>${eq.price}</td>
+          <td>${parseFloat(eq.price).toFixed(2)}</td>
           <td>${holdingsMap[eq.name] || 0}</td>
           <td>
             <button class="btn buy" onclick="trade('${eq.name}', 50, 'Buy')">Buy 50</button>
@@ -131,6 +133,9 @@
             <button class="btn sell" onclick="trade('${eq.name}', 50, 'Sell')">Sell 50</button>
             <button class="btn sell" onclick="trade('${eq.name}', 100, 'Sell')">Sell 100</button>
             <button class="btn sell" onclick="trade('${eq.name}', 200, 'Sell')">Sell 200</button>
+          </td>
+          <td>
+            ${eq.pdfLink ? `<a href="${eq.pdfLink}" target="_blank"><button class="btn view">View PDF</button></a>` : "—"}
           </td>
         `;
 
